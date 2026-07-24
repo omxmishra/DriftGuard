@@ -4,11 +4,12 @@ from faker import Faker
 import random
 import uuid
 from datetime import datetime, timedelta
+import config
 
 fake = Faker()
-Faker.seed(42)
-np.random.seed(42)
-random.seed(42)
+Faker.seed(config.RANDOM_SEED)
+np.random.seed(config.RANDOM_SEED)
+random.seed(config.RANDOM_SEED)
 
 N_ENTITIES = 250
 SIM_DAYS = 30
@@ -23,6 +24,10 @@ ENTITY_TYPES = ["user"] * 7 + ["service_account"] * 2 + ["edge_device"] * 1
 def make_profile(entity_id, entity_type):
     home = random.choice(CITIES)
     n_resources = random.randint(3, 8)
+    os_fw = fake.user_agent() if entity_type != "edge_device" else f"firmware_v{random.randint(1,5)}.{random.randint(0,9)}"
+    mac = fake.mac_address()
+    protocol = random.choice(["TLS1.2", "TLS1.3"]) if entity_type != "edge_device" else random.choice(["MQTT", "CoAP", "Modbus"])
+    fingerprint = f"{os_fw}|MAC:{mac}|PROTO:{protocol}"
     return {
         "entity_id": entity_id,
         "entity_type": entity_type,
@@ -34,8 +39,10 @@ def make_profile(entity_id, entity_type):
         "resources": random.sample(RESOURCE_POOL, n_resources),
         "auth_method": random.choice(AUTH_METHODS),
         "session_duration_mean": random.uniform(5, 90),
-        "os_fw": fake.user_agent() if entity_type != "edge_device" else f"firmware_v{random.randint(1,5)}.{random.randint(0,9)}",
-        "mac": fake.mac_address(),
+        "os_fw": os_fw,
+        "mac": mac,
+        "protocol": protocol,
+        "fingerprint": fingerprint,
         "sessions_per_day": random.uniform(0.3, 4.0),
     }
 
@@ -78,7 +85,7 @@ def normal_session(entity_id, day_offset):
     duration = max(1, np.random.normal(p["session_duration_mean"], p["session_duration_mean"] * 0.3))
     cmds = random.sample(["read", "write", "list", "download", "query"], k=random.randint(1, 3))
     new_row(entity_id, ts, fake.ipv4(), p["home_city"], resource, p["auth_method"],
-            duration, ",".join(cmds), p["os_fw"], True, "normal")
+            duration, ",".join(cmds), p["fingerprint"], True, "normal")
 
 for eid, p in profiles.items():
     n_sessions = int(p["sessions_per_day"] * SIM_DAYS)
@@ -96,7 +103,7 @@ def inject_brute_force(n_incidents):
             ts = base_ts + timedelta(seconds=j * random.uniform(1, 5))
             new_row(eid, ts, ip, "unknown", random.choice(RESOURCE_POOL),
                     profiles[eid]["auth_method"], 0.1, "auth_attempt",
-                    profiles[eid]["os_fw"], False, "brute_force")
+                    profiles[eid]["fingerprint"], False, "brute_force")
 
 def inject_impossible_travel(n_incidents):
     for _ in range(n_incidents):
@@ -107,9 +114,9 @@ def inject_impossible_travel(n_incidents):
         far_city = random.choice([c for c in CITIES if c[0] != p["home_city"]])
         ts2 = ts1 + timedelta(minutes=random.randint(5, 45))
         new_row(eid, ts1, fake.ipv4(), p["home_city"], random.choice(p["resources"]),
-                p["auth_method"], 10, "read", p["os_fw"], True, "impossible_travel")
+                p["auth_method"], 10, "read", p["fingerprint"], True, "impossible_travel")
         new_row(eid, ts2, fake.ipv4(), far_city[0], random.choice(p["resources"]),
-                p["auth_method"], 10, "read", p["os_fw"], True, "impossible_travel")
+                p["auth_method"], 10, "read", p["fingerprint"], True, "impossible_travel")
 
 def inject_credential_stuffing(n_incidents):
     for _ in range(n_incidents):
@@ -121,7 +128,7 @@ def inject_credential_stuffing(n_incidents):
             ts = base_ts + timedelta(seconds=j * random.uniform(0.5, 3))
             new_row(eid, ts, random.choice(ips), "unknown", random.choice(RESOURCE_POOL),
                     profiles[eid]["auth_method"], 0.1, "auth_attempt",
-                    profiles[eid]["os_fw"], False, "credential_stuffing")
+                    profiles[eid]["fingerprint"], False, "credential_stuffing")
 
 def inject_lateral_movement(n_incidents):
     for _ in range(n_incidents):
@@ -133,7 +140,7 @@ def inject_lateral_movement(n_incidents):
         for j, r in enumerate(new_resources):
             ts = base_ts + timedelta(minutes=j * random.uniform(1, 4))
             new_row(eid, ts, fake.ipv4(), p["home_city"], r, p["auth_method"],
-                    random.uniform(1, 5), "list,read,write", p["os_fw"], True, "lateral_movement")
+                    random.uniform(1, 5), "list,read,write", p["fingerprint"], True, "lateral_movement")
 
 def inject_device_spoofing(n_incidents):
     for _ in range(n_incidents):
@@ -142,8 +149,10 @@ def inject_device_spoofing(n_incidents):
         day = random.randint(0, SIM_DAYS - 1)
         ts = random_time_on_day(day, p["login_hour_mean"], p["login_hour_std"])
         fake_fw = f"firmware_v{random.randint(6,9)}.{random.randint(0,9)}"
+        fake_mac = fake.mac_address()
+        fake_fingerprint = f"{fake_fw}|MAC:{fake_mac}|PROTO:{p['protocol']}"
         new_row(eid, ts, fake.ipv4(), p["home_city"], random.choice(p["resources"]),
-                p["auth_method"], 5, "read", fake_fw, True, "device_spoofing")
+                p["auth_method"], 5, "read", fake_fingerprint, True, "device_spoofing")
 
 def inject_low_and_slow(n_incidents):
     for _ in range(n_incidents):
@@ -155,7 +164,7 @@ def inject_low_and_slow(n_incidents):
             ts = random_time_on_day(day, random.choice([1, 2, 3, 23]), 0.5)
             new_row(eid, ts, fake.ipv4(), p["home_city"], random.choice(RESOURCE_POOL),
                     p["auth_method"], random.uniform(1, 3), "download",
-                    p["os_fw"], True, "low_and_slow_exfil")
+                    p["fingerprint"], True, "low_and_slow_exfil")
 
 def inject_insider_drift(n_incidents):
     for _ in range(n_incidents):
@@ -169,7 +178,7 @@ def inject_insider_drift(n_incidents):
             n_new = min(1 + k // 5, len(pool))
             r = random.choice(pool[:max(n_new, 1)])
             new_row(eid, ts, fake.ipv4(), p["home_city"], r, p["auth_method"],
-                    random.uniform(2, 6), "read,write", p["os_fw"], True, "insider_drift")
+                    random.uniform(2, 6), "read,write", p["fingerprint"], True, "insider_drift")
 
 n_normal_rows = len(rows)
 target_anomaly_rows = int(n_normal_rows * 0.018)
@@ -189,10 +198,7 @@ print("Total rows:", len(df))
 print(df["label"].value_counts())
 print("Anomaly %:", round(100 * (df["label"] != "normal").sum() / len(df), 3))
 
-df.to_csv("/mnt/user-data/outputs/access_logs_full.csv", index=False)
-
-df_inference = df.drop(columns=["label"])
-df_inference.to_csv("/mnt/user-data/outputs/access_logs_inference.csv", index=False)
+df.to_csv(config.FULL_LOG_PATH, index=False)
 
 df_labels = df[["session_id", "label"]]
-df_labels.to_csv("/mnt/user-data/outputs/access_logs_ground_truth.csv", index=F
+df_labels.to_csv(config.GROUND_TRUTH_PATH, index=False)
