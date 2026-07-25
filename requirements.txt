@@ -7,3 +7,4 @@ xgboost
 shap
 streamlit
 plotly
+xgboost==1.7.6
