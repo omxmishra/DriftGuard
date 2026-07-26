@@ -8,3 +8,4 @@ shap
 streamlit
 plotly
 xgboost==1.7.6
+reportlab
