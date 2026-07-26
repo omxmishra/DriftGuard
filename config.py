@@ -3,6 +3,7 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
+SCREENSHOTS_DIR = os.path.join(BASE_DIR, "screenshots")
 
 FULL_LOG_PATH = os.path.join(DATA_DIR, "access_logs_full.csv")
 FEATURES_PATH = os.path.join(DATA_DIR, "access_logs_features.csv")

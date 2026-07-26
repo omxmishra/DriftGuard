@@ -45,6 +45,7 @@ clf = XGBClassifier(
     n_estimators=200,
     learning_rate=0.1,
     base_score=0.5,
+    n_jobs=1,
     random_state=config.RANDOM_SEED,
 )
 clf.fit(X_train, y_train, sample_weight=sample_weight)

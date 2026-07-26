@@ -1,11 +1,15 @@
+import os
+import glob
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, ListFlowable, ListItem, KeepTogether
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, ListFlowable, ListItem,
+    KeepTogether, Image, PageBreak
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_LEFT
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
+import config
 
 styles = getSampleStyleSheet()
 styles.add(ParagraphStyle(name="H1Custom", fontSize=20, leading=24, spaceAfter=14, textColor=colors.HexColor("#1f6feb"), fontName="Helvetica-Bold"))
@@ -13,6 +17,9 @@ styles.add(ParagraphStyle(name="H2Custom", fontSize=14, leading=18, spaceBefore=
 styles.add(ParagraphStyle(name="BodyCustom", fontSize=10, leading=15, spaceAfter=8, alignment=TA_LEFT))
 styles.add(ParagraphStyle(name="BulletCustom", fontSize=10, leading=14, spaceAfter=2, alignment=TA_LEFT))
 styles.add(ParagraphStyle(name="Caption", fontSize=9, leading=12, textColor=colors.grey, spaceAfter=10))
+styles.add(ParagraphStyle(name="CoverLabel", fontSize=10, leading=14, textColor=colors.HexColor("#5f6368"), fontName="Helvetica-Bold", spaceBefore=6))
+styles.add(ParagraphStyle(name="CoverValue", fontSize=11, leading=15, spaceAfter=2))
+styles.add(ParagraphStyle(name="ImgCaption", fontSize=9, leading=12, textColor=colors.grey, alignment=TA_CENTER, spaceAfter=14))
 
 doc = SimpleDocTemplate("reports/DriftGuard_Technical_Report.pdf", pagesize=letter,
                          topMargin=0.7*inch, bottomMargin=0.7*inch, leftMargin=0.75*inch, rightMargin=0.75*inch)
@@ -55,6 +62,24 @@ h1("DriftGuard")
 body("<b>AI-Powered Behavioral Anomaly Detection for Enterprise SOCs</b>")
 caption("Technical Report - Honeywell Hackathon Q4: Behavioral Anomaly Detection for Cybersecurity")
 
+story.append(Paragraph("Author:", styles["CoverLabel"]))
+story.append(Paragraph("Om Mishra", styles["CoverValue"]))
+story.append(Paragraph("Candidate ID:", styles["CoverLabel"]))
+story.append(Paragraph("20526459", styles["CoverValue"]))
+story.append(Paragraph("Email:", styles["CoverLabel"]))
+story.append(Paragraph("om.mishra.2410@gmail.com", styles["CoverValue"]))
+story.append(Paragraph("GitHub Repository:", styles["CoverLabel"]))
+story.append(Paragraph('<link href="https://github.com/omxmishra/DriftGuard" color="blue">https://github.com/omxmishra/DriftGuard</link>', styles["CoverValue"]))
+story.append(Spacer(1, 10))
+
+h2("Submission Overview")
+body(
+    "This document presents a complete technical report for DriftGuard, a behavioral anomaly detection "
+    "system built for Honeywell Hackathon Q4. It covers the problem, architecture, dataset, detection and "
+    "classification approach, explainability layer, results, known limitations, and supporting references. "
+    "A working prototype (Streamlit dashboard) and full source code accompany this report."
+)
+
 h2("1. Problem Summary")
 body(
     "Traditional signature-based security fails against novel or slow, low-and-slow intrusions. "
@@ -63,7 +88,21 @@ body(
     "explainable risk score for SOC analysts."
 )
 
-h2("2. Assumptions")
+h2("2. Innovation and Uniqueness")
+bullets([
+    "Hybrid detection engine: a statistical baseline and an LSTM sequence model run independently and are "
+    "combined via max-percentile-rank ensembling, so each attack type is caught by whichever detector is "
+    "strongest for it, rather than one dominant score consuming the shared alert budget.",
+    "Multi-class attack classification with an explicit 'normal' rejection class, so the classifier can "
+    "identify and downgrade the detector's own false positives instead of forcing an incorrect attack "
+    "label onto them.",
+    "SHAP-based explainability translated into analyst-readable phrases (e.g. 'geo-velocity: login from "
+    "an unfamiliar location') rather than raw feature-attribution values.",
+    "Explicit, dashboard-visible cold-start handling: entities without enough history for sequence "
+    "scoring are surfaced in a dedicated monitoring panel, not silently ignored.",
+])
+
+h2("3. Assumptions")
 bullets([
     "Real intrusion/access-log datasets are privacy-restricted and domain-specific; a synthetic generator "
     "was built to produce schema-compliant data with injected, labeled attack patterns.",
@@ -75,7 +114,7 @@ bullets([
     "themselves, mirroring real deployments where true labels are unavailable at inference time.",
 ])
 
-h2("3. System Architecture")
+h2("4. System Architecture")
 body("The pipeline is organized as six sequential stages, each with a single-responsibility script:")
 bullets([
     "<b>generate_data.py</b> - synthetic access-log generator (7 attack behaviours + 1 ambiguous edge case)",
@@ -88,7 +127,7 @@ bullets([
 caption("Data flow: Logs -> Feature Engineering -> [Baseline Profile + LSTM Sequence Model] -> Ensemble -> "
         "Attack Classifier -> SHAP Explainability -> Analyst Dashboard")
 
-h2("4. Dataset")
+h2("5. Dataset")
 body(
     f"250 entities (users, service accounts, edge devices) over 30 simulated days, producing "
     f"<b>16,294 total sessions</b> with a <b>2.081% anomaly rate</b> - within the brief's suggested "
@@ -112,7 +151,7 @@ story.append(KeepTogether([
               "expansion), included to test false-positive tuning rather than as a clean-cut attack.", styles["Caption"]),
 ]))
 
-h2("5. Detection Approach")
+h2("6. Detection Approach")
 body(
     "A statistical baseline (per-entity z-scores on login hour and session duration, plus binary flags for "
     "new resource/IP/geo/fingerprint/auth-method/auth-failure) provides a fast, interpretable first signal. "
@@ -123,7 +162,7 @@ body(
     "alert budget."
 )
 
-h2("6. Results - Detection Recall by Attack Type (Top 2% Alert Budget)")
+h2("7. Results - Detection Recall by Attack Type (Top 2% Alert Budget)")
 detection_table = make_table([
     ["Attack Type", "Baseline Only", "Ensemble (Final)"],
     ["brute_force", "92.1%", "100%"],
@@ -143,7 +182,7 @@ body(
     "shared 2% budget by stronger-scoring attack types."
 )
 
-h2("7. Results - Attack-Type Classification (Held-Out Test Set)")
+h2("8. Results - Attack-Type Classification (Held-Out Test Set)")
 class_table = make_table([
     ["Class", "Precision", "Recall", "F1", "Support"],
     ["brute_force", "1.00", "1.00", "1.00", "22"],
@@ -160,11 +199,11 @@ story.append(Spacer(1, 10))
 body(
     "Including 'normal' as a trainable class allows the classifier to identify detector false positives "
     "instead of forcing an incorrect attack label onto them. On real flagged alerts (not the held-out test "
-    "set), predicted-vs-true label agreement is <b>97.8%</b> (up from 46% before this fix, when false "
+    "set), predicted-vs-true label agreement is <b>98.7%</b> (up from 46% before this fix, when false "
     "positives were being force-labeled)."
 )
 
-h2("8. Explainability")
+h2("9. Explainability")
 body(
     "SHAP TreeExplainer computes per-alert feature attribution against the classifier's predicted class. "
     "The top contributing features per alert are translated into analyst-readable phrases (e.g. "
@@ -173,7 +212,7 @@ body(
     "chart is also generated for the flagged population as a whole."
 )
 
-h2("9. Cold-Start and Concept Drift")
+h2("10. Cold-Start and Concept Drift")
 bullets([
     "<b>Cold-start:</b> entities with fewer than 10 sessions (the minimum LSTM window size) cannot yet be "
     "scored by the sequence model. These fall back to their own per-entity statistical baseline score, and "
@@ -186,7 +225,7 @@ bullets([
     "recall of any category, reflecting appropriately cautious handling of ambiguous, gradual change.",
 ])
 
-h2("10. Scalability and Real-Time Streaming Feasibility")
+h2("11. Scalability and Real-Time Streaming Feasibility")
 body(
     "The current implementation is a batch pipeline over a static CSV, but each scoring stage is designed "
     "around single-session functions (baseline scoring, LSTM window scoring) rather than whole-dataset "
@@ -196,7 +235,7 @@ body(
     "profile in the background - without requiring a full pipeline re-run."
 )
 
-h2("11. Known Limitations")
+h2("12. Known Limitations")
 bullets([
     "Synthetic data is more cleanly separable than real logs; held-out classification metrics (nearly 100%) "
     "should be read as an upper bound, not a guarantee of real-world performance.",
@@ -211,9 +250,12 @@ bullets([
     "environment's SHAP version is later upgraded.",
     "No live streaming deployment or continuous retraining loop was implemented in this submission - both "
     "are documented as design extensions rather than working code.",
+    "The schema's command_sequence and protocol fields are generated and present in the data but are not "
+    "yet used as model features; they are a natural next step for detecting privileged-session misuse and "
+    "protocol-level anomalies specifically.",
 ])
 
-h2("12. Conclusion")
+h2("13. Conclusion")
 body(
     "DriftGuard delivers all seven required components of the Q4 problem statement: a documented synthetic "
     "data generator, a per-entity statistical baseline, an LSTM sequence-aware detector ensembled with that "
@@ -222,5 +264,75 @@ body(
     "honestly reported limitations throughout."
 )
 
+h2("14. Evaluation Criteria Mapping")
+cell_style = ParagraphStyle(name="TableCell", fontSize=9, leading=12, fontName="Helvetica")
+cell_style_bold = ParagraphStyle(name="TableCellBold", fontSize=9, leading=12, fontName="Helvetica-Bold", textColor=colors.white)
+
+eval_rows_raw = [
+    ["Detection accuracy on imbalanced labels", "Hybrid baseline + LSTM ensemble, trained/evaluated at 2.08% anomaly rate"],
+    ["Correct anomaly-type classification", "XGBoost multi-class classifier, 7 types + normal rejection class"],
+    ["False positive rate at analyst alert budget", "Evaluated at both top 2% and top 1% budgets; false-positive rate reported per budget"],
+    ["Explainability / analyst usability", "SHAP TreeExplainer, translated to analyst-readable phrases per alert"],
+    ["Handling cold-start entities", "Statistical baseline fallback for entities under 10 sessions; surfaced in dashboard"],
+    ["Handling concept drift", "Rolling-window baseline refresh (documented design); insider_drift used to stress-test ambiguous drift"],
+    ["System design & scalability (streaming feasibility)", "Single-session scoring functions; documented event-bus + rolling-profile streaming architecture"],
+    ["Report clarity", "This report: assumptions, architecture, metrics, limitations, and references"],
+]
+eval_table_data = [[Paragraph("Evaluation Criterion", cell_style_bold), Paragraph("Our Solution", cell_style_bold)]]
+for crit, sol in eval_rows_raw:
+    eval_table_data.append([Paragraph(crit, cell_style), Paragraph(sol, cell_style)])
+
+eval_table = Table(eval_table_data, colWidths=[2.6*inch, 3.4*inch], repeatRows=1)
+eval_table.setStyle(TableStyle([
+    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f6feb")),
+    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
+    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f6f8fa")]),
+    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ("TOPPADDING", (0, 0), (-1, -1), 6),
+    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+]))
+story.append(eval_table)
+story.append(Spacer(1, 10))
+caption("Each row maps directly to the problem statement's own evaluation criteria, so coverage can be checked line by line.")
+
+h2("15. Research and References")
+bullets([
+    '<link href="https://pytorch.org/docs/stable/index.html" color="blue">PyTorch documentation</link> - LSTM autoencoder implementation',
+    '<link href="https://xgboost.readthedocs.io/" color="blue">XGBoost documentation</link> - multi-class attack classifier',
+    '<link href="https://shap.readthedocs.io/" color="blue">SHAP documentation</link> - per-alert feature attribution',
+    '<link href="https://docs.streamlit.io/" color="blue">Streamlit documentation</link> - analyst dashboard framework',
+    '<link href="https://scikit-learn.org/stable/" color="blue">scikit-learn documentation</link> - preprocessing, scaling, and evaluation metrics',
+    '<link href="https://github.com/omxmishra/DriftGuard" color="blue">DriftGuard GitHub repository</link> - full source code and commit history',
+])
+
+screenshot_files = sorted(
+    glob.glob(os.path.join(config.SCREENSHOTS_DIR, "*.png")) +
+    glob.glob(os.path.join(config.SCREENSHOTS_DIR, "*.jpg")) +
+    glob.glob(os.path.join(config.SCREENSHOTS_DIR, "*.jpeg"))
+)
+
+if screenshot_files:
+    story.append(PageBreak())
+    h2("16. Screenshots")
+    body("Supporting screenshots of code, results, and the working dashboard prototype.")
+    max_width = 6.5 * inch
+    for path in screenshot_files:
+        img = Image(path)
+        ratio = img.imageWidth / img.imageHeight if img.imageHeight else 1
+        img.drawWidth = max_width
+        img.drawHeight = max_width / ratio
+        label = os.path.splitext(os.path.basename(path))[0].replace("_", " ").replace("-", " ")
+        story.append(KeepTogether([
+            img,
+            Paragraph(label, styles["ImgCaption"]),
+        ]))
+        story.append(Spacer(1, 8))
+
 doc.build(story)
 print("PDF generated at reports/DriftGuard_Technical_Report.pdf")
+if screenshot_files:
+    print(f"Embedded {len(screenshot_files)} screenshot(s) from screenshots/")
+else:
+    print("No screenshots found in screenshots/ folder - section 16 skipped. Drop PNG/JPG files there and re-run to include them.")

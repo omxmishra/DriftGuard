@@ -1,8 +1,13 @@
 __pycache__/
 *.pyc
+*.pyo
 data/
 models/
 .env
+.venv/
+env/
 .ipynb_checkpoints/
 .DS_Store
 *.log
+.vscode/
+.idea/
